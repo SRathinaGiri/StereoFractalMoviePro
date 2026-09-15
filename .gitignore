@@ -1,0 +1,37 @@
+# Build directories and outputs
+build/
+bin/
+*.exe
+*.dll
+*.obj
+*.o
+*.a
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# CMake artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.ninja
+.ninja_*
+
+# Deployment and distribution
+dist/
+Output/
+dist_installer/
+release_assets/
+*.zip
+*.tar.gz
+test_temp_frames/
+
+# IDE and OS files
+.vscode/
+.idea/
+*.user
+*.user.*
+Thumbs.db
+[Dd]esktop.ini
