@@ -11,6 +11,7 @@
 #include "../src/stereoprocessor.h"
 #include "../src/videoworker.h"
 #include "../src/mainwindow.h"
+#include "../src/spherical.h"
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
@@ -172,6 +173,99 @@ int main(int argc, char *argv[]) {
     qint64 sizeColorAna = QFile(colorAnaOut).size();
     std::cout << "PASS: parallel_final.mp4 generated (" << sizeParallel << " bytes)." << std::endl;
     std::cout << "PASS: color_anaglyph_final.mp4 generated (" << sizeColorAna << " bytes)." << std::endl;
+
+    // 6b. 360 VR: the stereo window wraps around, top-bottom layout, metadata
+    {
+        QImage pl(256, 128, QImage::Format_RGB888);
+        pl.fill(Qt::black);
+        QPainter pp(&pl);
+        pp.fillRect(0, 0, 10, 128, Qt::white); // a stripe at the left edge
+        pp.end();
+        QImage pr = pl.copy();
+        QPair<QImage, QImage> w360 = StereoProcessor::applyStereoWindow360(pl, pr, -20);
+        // no crop, and the stripe turned round: pixel x is pixel x + 20 (as the
+        // inward crop), so the stripe at 0..9 is at 236..245
+        if (w360.first.width() != 256 || w360.second.width() != 256 ||
+            QColor(w360.first.pixel(240, 5)) != QColor(Qt::white) ||
+            QColor(w360.first.pixel(5, 5)) != QColor(Qt::black) ||
+            QColor(w360.second.pixel(5, 5)) != QColor(Qt::white)) {
+            std::cerr << "FAIL: 360 stereo window does not wrap around." << std::endl;
+            return 1;
+        }
+        std::cout << "PASS: 360 stereo window turns the left eye round without cropping." << std::endl;
+
+        QImage tb = StereoProcessor::combineStereo(pl, pr, QStringLiteral("vr360_tb"));
+        if (tb.width() != 256 || tb.height() != 256) {
+            std::cerr << "FAIL: vr360_tb size " << tb.width() << "x" << tb.height() << std::endl;
+            return 1;
+        }
+        std::cout << "PASS: 360 top-bottom frame is 256x256 (left eye on top)." << std::endl;
+
+        QString vrDir = QDir::current().filePath("test_temp_vr");
+        QDir().mkpath(vrDir);
+        for (int i = 1; i <= 4; ++i) {
+            QImage l(256, 128, QImage::Format_RGB888), r(256, 128, QImage::Format_RGB888);
+            l.fill(QColor(30, 60, 120));
+            r.fill(QColor(30, 60, 120));
+            l.save(QString("%1/newLeft%2.png").arg(vrDir).arg(i, 6, 10, QChar('0')));
+            r.save(QString("%1/newRight%2.png").arg(vrDir).arg(i, 6, 10, QChar('0')));
+        }
+        int w = 0, h = 0;
+        QString e, wn;
+        RenderOptions vo;
+        vo.framePairs = StereoProcessor::loadFramePairs(vrDir, w, h, e, wn);
+        vo.folderPath = vrDir;
+        vo.modes = {QStringLiteral("vr360_tb"), QStringLiteral("vr360_mono")};
+        vo.windowOffset = -6;
+        vo.useText = true;
+        vo.topText = QStringLiteral("Title");
+        vo.bottomText = QStringLiteral("Credit");
+        vo.startDur = 1;
+        vo.endDur = 1;
+        VideoWorker vw(vo);
+        bool vok = false;
+        QString vmsg;
+        QObject::connect(&vw, &VideoWorker::finished, [&](bool ok, const QString &m) { vok = ok; vmsg = m; });
+        vw.process();
+        if (!vok) {
+            std::cerr << "FAIL: 360 VideoWorker: " << vmsg.toStdString() << std::endl;
+            return 1;
+        }
+        const QStringList outs = {vrDir + "/vr360_final_360_TB.mp4", vrDir + "/vr360_mono_final_360.mp4"};
+        for (const QString &o : outs) {
+            QFile f(o);
+            if (!f.open(QIODevice::ReadOnly)) {
+                std::cerr << "FAIL: missing " << o.toStdString() << std::endl;
+                return 1;
+            }
+            QByteArray d = f.readAll();
+            if (!d.contains("st3d") || !d.contains("sv3d") || !d.contains("equi")) {
+                std::cerr << "FAIL: no spherical metadata in " << o.toStdString() << std::endl;
+                return 1;
+            }
+            // done again: replaced, not added
+            QByteArray again = Spherical::inject(d, Spherical::Stereo::TopBottom);
+            if (again.size() != d.size() || again.count("sv3d") != 1) {
+                std::cerr << "FAIL: injecting twice changed the size" << std::endl;
+                return 1;
+            }
+        }
+        // ffprobe, when there is one, reads the metadata and decodes the file
+        QProcess probe;
+        probe.start(QStringLiteral("ffprobe"), {QStringLiteral("-v"), QStringLiteral("error"),
+                                                QStringLiteral("-show_streams"), outs[0]});
+        if (probe.waitForStarted(3000) && probe.waitForFinished(20000)) {
+            QString out = QString::fromUtf8(probe.readAllStandardOutput());
+            if (!out.contains(QStringLiteral("equirectangular")) || !out.contains(QStringLiteral("top and bottom")) ||
+                !out.contains(QStringLiteral("height=256"))) {
+                std::cerr << "FAIL: ffprobe does not see a stereo 360 video:\n" << out.toStdString() << std::endl;
+                return 1;
+            }
+            std::cout << "PASS: ffprobe reads 360 equirectangular, top and bottom." << std::endl;
+        }
+        std::cout << "PASS: 360 VR stereo and mono MP4s carry the Spherical Video V2 metadata." << std::endl;
+        QDir(vrDir).removeRecursively();
+    }
 
     // 7. Test Project JSON Save and Import
     QString projectSavePath = testDir + "/test_project.json";

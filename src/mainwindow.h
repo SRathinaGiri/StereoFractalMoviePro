@@ -82,6 +82,8 @@ private:
     QCheckBox *m_chkCross = nullptr;
     QCheckBox *m_chkColorAna = nullptr;
     QCheckBox *m_chkGrayAna = nullptr;
+    QCheckBox *m_chkVr360 = nullptr;
+    QCheckBox *m_chkVr360Mono = nullptr;
     QCheckBox *m_chkPingPong = nullptr;
     QDoubleSpinBox *m_spinSpeed = nullptr;
     QSpinBox *m_spinCrf = nullptr;

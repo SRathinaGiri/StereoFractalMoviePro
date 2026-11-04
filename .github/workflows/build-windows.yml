@@ -1,0 +1,59 @@
+name: Build Windows
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Qt (MinGW)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          tools: "tools_mingw1310"
+          cache: true
+
+      - name: FFmpeg (for the tests)
+        shell: pwsh
+        run: choco install ffmpeg -y --no-progress
+
+      - name: Build
+        shell: pwsh
+        run: |
+          $mingw = Get-ChildItem "$env:RUNNER_WORKSPACE/Qt/Tools" -Directory -Filter "mingw*" | Select-Object -First 1
+          $env:PATH = "$($mingw.FullName)\bin;$env:QT_ROOT_DIR\bin;$env:PATH"
+          cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+          cmake --build build --parallel
+
+      - name: Test
+        shell: pwsh
+        run: |
+          $mingw = Get-ChildItem "$env:RUNNER_WORKSPACE/Qt/Tools" -Directory -Filter "mingw*" | Select-Object -First 1
+          $env:PATH = "$($mingw.FullName)\bin;$env:QT_ROOT_DIR\bin;$env:PATH"
+          $env:QT_QPA_PLATFORM = "offscreen"
+          cd build
+          ./TestStereo.exe
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $mingw = Get-ChildItem "$env:RUNNER_WORKSPACE/Qt/Tools" -Directory -Filter "mingw*" | Select-Object -First 1
+          $env:PATH = "$($mingw.FullName)\bin;$env:QT_ROOT_DIR\bin;$env:PATH"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item build/StereoMoviePro.exe dist/
+          windeployqt --compiler-runtime --release dist/StereoMoviePro.exe
+          Copy-Item README.md, LICENSE dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StereoFractalMoviePro-windows-x64
+          path: dist/

@@ -1,4 +1,5 @@
 #include "videoworker.h"
+#include "spherical.h"
 #include <QProcess>
 #include <QFileInfo>
 #include <QDir>
@@ -75,12 +76,20 @@ void VideoWorker::process() {
         const QString &mode = m_options.modes[modeIdx];
         emit progress(0, QStringLiteral("Preparing %1...").arg(mode));
 
-        int outW = (mode == QStringLiteral("parallel") || mode == QStringLiteral("cross")) ? (adjW * 2) : adjW;
-        int outH = adjH;
+        const bool vr = StereoProcessor::is360(mode);
+        // (a panorama is not cropped by the stereo window: its picture keeps
+        // its size)
+        int eyeW = vr ? sampleL.width() - (sampleL.width() % 2) : adjW;
+        int eyeH = vr ? sampleL.height() - (sampleL.height() % 2) : adjH;
+        int outW = (mode == QStringLiteral("parallel") || mode == QStringLiteral("cross")) ? (eyeW * 2) : eyeW;
+        int outH = (mode == QStringLiteral("vr360_tb")) ? (eyeH * 2) : eyeH;
         outW = outW - (outW % 2);
         outH = outH - (outH % 2);
 
-        QString outputFilename = QStringLiteral("%1_final.mp4").arg(mode);
+        // 360 players without the metadata go by the name: _360, _360_TB
+        QString outputFilename = (mode == QStringLiteral("vr360_tb"))   ? QStringLiteral("vr360_final_360_TB.mp4")
+                                 : (mode == QStringLiteral("vr360_mono")) ? QStringLiteral("vr360_mono_final_360.mp4")
+                                                                        : QStringLiteral("%1_final.mp4").arg(mode);
         QString outputPath = QDir(m_options.folderPath).filePath(outputFilename);
 
         QStringList args;
@@ -144,15 +153,24 @@ void VideoWorker::process() {
                 continue;
             }
 
-            QPair<QImage, QImage> adjusted = StereoProcessor::applyStereoWindow(imgL, imgR, m_options.windowOffset);
+            QPair<QImage, QImage> adjusted = vr ? StereoProcessor::applyStereoWindow360(imgL, imgR, m_options.windowOffset)
+                                                : StereoProcessor::applyStereoWindow(imgL, imgR, m_options.windowOffset);
 
             if (m_options.useText && (frameIdx < startThreshold || frameIdx >= endThreshold)) {
-                StereoProcessor::add3DText(adjusted.first, adjusted.second, m_options.topText, m_options.bottomText);
+                if (vr) {
+                    StereoProcessor::add3DText360(adjusted.first, adjusted.second, m_options.topText, m_options.bottomText);
+                } else {
+                    StereoProcessor::add3DText(adjusted.first, adjusted.second, m_options.topText, m_options.bottomText);
+                }
             }
 
             QImage combined = StereoProcessor::combineStereo(adjusted.first, adjusted.second, mode);
             if (combined.format() != QImage::Format_RGB888) {
                 combined = combined.convertToFormat(QImage::Format_RGB888);
+            }
+            if (combined.width() != outW || combined.height() != outH) {
+                // (a frame of another size than the first would shear the video)
+                combined = combined.scaled(outW, outH, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
             }
 
             int w = combined.width();
@@ -213,6 +231,19 @@ void VideoWorker::process() {
             QString err = QString::fromUtf8(ffmpeg.readAllStandardError());
             emit finished(false, QStringLiteral("FFmpeg failed with exit code %1:\n%2").arg(ffmpeg.exitCode()).arg(err.right(400)));
             return;
+        }
+
+        if (vr) {
+            // the Spherical Video V2 metadata: shown as a sphere (stereo
+            // top-bottom or mono) by YouTube, Meta Quest and VLC
+            emit progress(static_cast<int>(((modeIdx + 1.0) / totalModes) * 100.0),
+                          QStringLiteral("Writing 360 metadata..."));
+            QString err;
+            Spherical::Stereo st = (mode == QStringLiteral("vr360_tb")) ? Spherical::Stereo::TopBottom : Spherical::Stereo::Mono;
+            if (!Spherical::injectFile(outputPath, st, &err)) {
+                emit finished(false, QStringLiteral("The 360 video was made but its VR metadata could not be written: %1").arg(err));
+                return;
+            }
         }
     }
 

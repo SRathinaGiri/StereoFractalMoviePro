@@ -30,6 +30,27 @@ public:
                           const QString &topStr,
                           const QString &bottomStr);
 
+    // 360-degree VR modes: "vr360_tb" (stereo, left eye on top, right
+    // below) and "vr360_mono" (the left eye alone). The frames are
+    // equirectangular panoramas (2:1).
+    static bool is360(const QString &mode);
+
+    // The stereo window of a 360 panorama: no crop (that would break the
+    // seam where the panorama meets itself behind the viewer) but the left
+    // eye's picture turned around by `offset` pixels, wrapping round
+    // (negative: inward, as applyStereoWindow).
+    static QPair<QImage, QImage> applyStereoWindow360(const QImage &imgL,
+                                                      const QImage &imgR,
+                                                      int offset);
+
+    // add3DText for a 360 panorama: the title above and the credit below
+    // the horizon in front of the viewer (the middle of the picture), not
+    // at its top and bottom edges (the poles of the sphere).
+    static void add3DText360(QImage &imgL,
+                             QImage &imgR,
+                             const QString &topStr,
+                             const QString &bottomStr);
+
     static QImage combineStereo(const QImage &imgL,
                                 const QImage &imgR,
                                 const QString &mode);

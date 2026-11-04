@@ -15,11 +15,19 @@ Featuring real-time live preview, pixel-accurate stereo window adjustment, float
 
 ## 🌟 Key Features
 
-### 🎬 4 Stereoscopic Output Modes
+### 🎬 6 Output Modes
 * **Parallel View (`||`)**: Side-by-side Left + Right for 3D displays, VR headsets, and parallel free-viewing.
 * **Cross-Eye View (`X`)**: Side-by-side Right + Left for cross-eyed free-viewing without glasses.
 * **Color Anaglyph (Red-Cyan)**: Classic red/cyan 3D glasses format (Red channel $\leftarrow$ Left, Green/Blue $\leftarrow$ Right).
 * **Grayscale Anaglyph**: Dubois-weighted monochrome anaglyph minimizing retinal rivalry and color flicker.
+* **360° VR Stereo (Top-Bottom)**: For VR headsets (Meta Quest) and YouTube VR. From 360° panorama frames (2:1, e.g. Mandelbulb3D's spherical panorama camera with stereo), the left eye on top and the right eye below. The MP4 carries the **Spherical Video V2** metadata (`st3d` top-bottom, `sv3d` equirectangular), so players show it as a stereo sphere; it is also named `vr360_final_360_TB.mp4` for players that go by the name.
+* **360° VR Mono**: The left eye's panorama alone, with the 360° metadata (`vr360_mono_final_360.mp4`): for Facebook 360, YouTube 360 on phones and other mono 360 players.
+
+#### 360° notes
+* The **stereo window** of a 360° video does not crop (that would break the seam where the panorama meets itself behind the viewer): the left eye is turned around by the offset instead, wrapping round.
+* The **3D text** is placed in front of the viewer, above and below the horizon in the middle of the panorama (at its top and bottom edges it would sit at the poles, squeezed into a point).
+* **Audio** is the same as for the other modes (AAC, 3-second fade-out); it plays as ordinary stereo sound, not head-tracked spatial audio.
+* For a sharp picture in a headset render the panoramas large: 4096×2048 per eye or more (a 360° panorama spreads its width over the whole circle around you).
 
 ### 📐 Pixel-Accurate Stereo Window Adjustment
 * **Inward / Outward Cropping**: Eliminate stereo window violations by shifting the convergence plane.
@@ -125,6 +133,8 @@ Saved project files use a clean, transparent JSON format:
     "doCross": true,
     "doColorAna": true,
     "doGrayAna": false,
+    "doVr360": true,
+    "doVr360Mono": false,
     "doPingPong": true,
     "speedFactor": 1.0,
     "crf": 23

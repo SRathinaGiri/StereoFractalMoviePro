@@ -144,6 +144,8 @@ void MainWindow::setupUi() {
     m_comboPreviewMode->addItem(QStringLiteral("cross"), QStringLiteral("cross"));
     m_comboPreviewMode->addItem(QStringLiteral("color_anaglyph"), QStringLiteral("color_anaglyph"));
     m_comboPreviewMode->addItem(QStringLiteral("gray_anaglyph"), QStringLiteral("gray_anaglyph"));
+    m_comboPreviewMode->addItem(QStringLiteral("360 VR top-bottom"), QStringLiteral("vr360_tb"));
+    m_comboPreviewMode->addItem(QStringLiteral("360 VR mono"), QStringLiteral("vr360_mono"));
 
     m_chkShowGuide = new QCheckBox(QStringLiteral("Show Stereo Window Guide"), this);
     m_chkShowGuide->setChecked(true);
@@ -313,11 +315,20 @@ void MainWindow::setupUi() {
     m_chkCross = new QCheckBox(QStringLiteral("Cross View X"), tabOptions);
     m_chkColorAna = new QCheckBox(QStringLiteral("Color Anaglyph"), tabOptions);
     m_chkGrayAna = new QCheckBox(QStringLiteral("Grayscale Anaglyph"), tabOptions);
+    m_chkVr360 = new QCheckBox(QStringLiteral("360° VR Stereo (Top-Bottom)"), tabOptions);
+    m_chkVr360->setToolTip(QStringLiteral(
+        "For VR headsets (Meta Quest) and YouTube VR: the frames must be 360° panoramas (2:1).\n"
+        "Left eye on top, right eye below; the MP4 gets the 360 stereo metadata."));
+    m_chkVr360Mono = new QCheckBox(QStringLiteral("360° VR Mono"), tabOptions);
+    m_chkVr360Mono->setToolTip(QStringLiteral(
+        "For Facebook 360 and phones: the left eye's 360° panorama alone, with the 360 metadata."));
 
     gridModes->addWidget(m_chkParallel, 0, 0);
     gridModes->addWidget(m_chkCross, 0, 1);
     gridModes->addWidget(m_chkColorAna, 1, 0);
     gridModes->addWidget(m_chkGrayAna, 1, 1);
+    gridModes->addWidget(m_chkVr360, 2, 0);
+    gridModes->addWidget(m_chkVr360Mono, 2, 1);
     optLayout->addLayout(gridModes);
 
     QHBoxLayout *optBottomRow = new QHBoxLayout();
@@ -496,6 +507,8 @@ void MainWindow::updatePreview() {
     else if (mode == QStringLiteral("cross")) modeDisplay = QStringLiteral("Cross X");
     else if (mode == QStringLiteral("color_anaglyph")) modeDisplay = QStringLiteral("Color Anaglyph");
     else if (mode == QStringLiteral("gray_anaglyph")) modeDisplay = QStringLiteral("Gray Anaglyph");
+    else if (mode == QStringLiteral("vr360_tb")) modeDisplay = QStringLiteral("360 VR Top-Bottom");
+    else if (mode == QStringLiteral("vr360_mono")) modeDisplay = QStringLiteral("360 VR Mono");
 
     m_lblFrameInfo->setText(
         QStringLiteral("Frame %1/%2    |    %3    |    Window %+1dpx")
@@ -544,6 +557,18 @@ void MainWindow::processFolder() {
     if (m_chkCross->isChecked()) selectedModes << QStringLiteral("cross");
     if (m_chkColorAna->isChecked()) selectedModes << QStringLiteral("color_anaglyph");
     if (m_chkGrayAna->isChecked()) selectedModes << QStringLiteral("gray_anaglyph");
+    if (m_chkVr360->isChecked()) selectedModes << QStringLiteral("vr360_tb");
+    if (m_chkVr360Mono->isChecked()) selectedModes << QStringLiteral("vr360_mono");
+
+    if ((m_chkVr360->isChecked() || m_chkVr360Mono->isChecked()) &&
+        m_originalHeight > 0 && std::abs(m_originalWidth - 2 * m_originalHeight) > 2) {
+        auto answer = QMessageBox::question(
+            this, QStringLiteral("Not a 360° panorama"),
+            QStringLiteral("The frames are %1 x %2, but a 360° panorama is twice as wide as high.\n"
+                           "VR players will show them stretched around the sphere.\n\nMake the 360 videos anyway?")
+                .arg(m_originalWidth).arg(m_originalHeight));
+        if (answer != QMessageBox::Yes) return;
+    }
 
     if (selectedModes.isEmpty()) {
         QMessageBox::critical(this, QStringLiteral("Error"), QStringLiteral("Select at least one output type."));
@@ -695,6 +720,8 @@ bool MainWindow::saveProjectToFile(const QString &filePath) {
     root[QStringLiteral("doCross")] = m_chkCross->isChecked();
     root[QStringLiteral("doColorAna")] = m_chkColorAna->isChecked();
     root[QStringLiteral("doGrayAna")] = m_chkGrayAna->isChecked();
+    root[QStringLiteral("doVr360")] = m_chkVr360->isChecked();
+    root[QStringLiteral("doVr360Mono")] = m_chkVr360Mono->isChecked();
     root[QStringLiteral("doPingPong")] = m_chkPingPong->isChecked();
     root[QStringLiteral("speedFactor")] = m_spinSpeed->value();
     root[QStringLiteral("crf")] = m_spinCrf->value();
@@ -816,6 +843,14 @@ bool MainWindow::loadProjectFromFile(const QString &filePath, QString *errorMsg)
 
     if (root.contains(QStringLiteral("doGrayAna"))) {
         m_chkGrayAna->setChecked(root.value(QStringLiteral("doGrayAna")).toBool(false));
+    }
+
+    if (root.contains(QStringLiteral("doVr360"))) {
+        m_chkVr360->setChecked(root.value(QStringLiteral("doVr360")).toBool(false));
+    }
+
+    if (root.contains(QStringLiteral("doVr360Mono"))) {
+        m_chkVr360Mono->setChecked(root.value(QStringLiteral("doVr360Mono")).toBool(false));
     }
 
     if (root.contains(QStringLiteral("doPingPong"))) {

@@ -219,6 +219,77 @@ void StereoProcessor::add3DText(QImage &imgL,
     drawText(imgR, topX - topOffset, topY, bottomX - bottomOffset, bottomY);
 }
 
+bool StereoProcessor::is360(const QString &mode) {
+    return mode == QStringLiteral("vr360_tb") || mode == QStringLiteral("vr360_mono");
+}
+
+QPair<QImage, QImage> StereoProcessor::applyStereoWindow360(const QImage &imgL,
+                                                            const QImage &imgR,
+                                                            int offset) {
+    if (imgL.isNull() || imgR.isNull()) {
+        return qMakePair(imgL, imgR);
+    }
+    int width = std::min(imgL.width(), imgR.width());
+    int height = std::min(imgL.height(), imgR.height());
+    width -= width % 2;
+    height -= height % 2;
+    QImage l = imgL.convertToFormat(QImage::Format_RGB888).copy(0, 0, width, height);
+    QImage r = imgR.convertToFormat(QImage::Format_RGB888).copy(0, 0, width, height);
+    int s = offset % width;
+    if (s != 0) {
+        // pixel x of the result is pixel x - s of the picture (wrapping)
+        QImage turned(width, height, QImage::Format_RGB888);
+        int cut = ((width - s) % width + width) % width;
+        QPainter p(&turned);
+        p.drawImage(0, 0, l, cut, 0, width - cut, height);
+        p.drawImage(width - cut, 0, l, 0, 0, cut, height);
+        p.end();
+        l = turned;
+    }
+    return qMakePair(l, r);
+}
+
+void StereoProcessor::add3DText360(QImage &imgL,
+                                   QImage &imgR,
+                                   const QString &topStr,
+                                   const QString &bottomStr) {
+    if (imgL.isNull() || imgR.isNull()) return;
+    if (imgL.format() != QImage::Format_RGB888) imgL = imgL.convertToFormat(QImage::Format_RGB888);
+    if (imgR.format() != QImage::Format_RGB888) imgR = imgR.convertToFormat(QImage::Format_RGB888);
+
+    const int width = imgL.width();
+    const int height = imgL.height();
+    // (a 360 picture's height is half its width; the type as large as on a
+    // flat frame of that height would cover a third of the view)
+    int pointSize = std::max(10, int(height * 22.0 / 1080.0));
+    QFont font(QStringLiteral("Arial"), pointSize, QFont::Bold);
+    QFontMetrics fm(font);
+    // the parallax: the title before the scene, the credit behind it
+    const int shift = std::max(2, int(width * 4.0 / 3840.0));
+
+    const int topW = fm.horizontalAdvance(topStr);
+    const int bottomW = fm.horizontalAdvance(bottomStr);
+    const int topX = (width - topW) / 2;
+    const int bottomX = (width - bottomW) / 2;
+    const int topY = int(height * 0.40);
+    const int bottomY = int(height * 0.62) + fm.ascent();
+
+    auto drawText = [&](QImage &img, int tX, int bX) {
+        QPainter painter(&img);
+        painter.setRenderHint(QPainter::TextAntialiasing, true);
+        painter.setFont(font);
+        painter.setPen(QColor(0, 0, 0, 180));
+        painter.drawText(tX + 2, topY + 2, topStr);
+        painter.drawText(bX + 2, bottomY + 2, bottomStr);
+        painter.setPen(Qt::white);
+        painter.drawText(tX, topY, topStr);
+        painter.drawText(bX, bottomY, bottomStr);
+        painter.end();
+    };
+    drawText(imgL, topX + shift, bottomX - shift);
+    drawText(imgR, topX - shift, bottomX + shift);
+}
+
 QImage StereoProcessor::combineStereo(const QImage &imgL,
                                       const QImage &imgR,
                                       const QString &mode) {
@@ -226,6 +297,18 @@ QImage StereoProcessor::combineStereo(const QImage &imgL,
 
     int w = std::min(imgL.width(), imgR.width());
     int h = std::min(imgL.height(), imgR.height());
+
+    if (mode == QStringLiteral("vr360_tb")) {
+        QImage out(w, h * 2, QImage::Format_RGB888);
+        QPainter p(&out);
+        p.drawImage(0, 0, imgL, 0, 0, w, h);
+        p.drawImage(0, h, imgR, 0, 0, w, h);
+        p.end();
+        return out;
+    } else if (mode == QStringLiteral("vr360_mono")) {
+        QImage out = imgL.copy(0, 0, w, h);
+        return out.format() == QImage::Format_RGB888 ? out : out.convertToFormat(QImage::Format_RGB888);
+    }
 
     if (mode == QStringLiteral("parallel")) {
         QImage out(w * 2, h, QImage::Format_RGB888);
@@ -305,7 +388,8 @@ QImage StereoProcessor::createPreview(const QImage &imgL,
                                       int maxH) {
     if (imgL.isNull() || imgR.isNull()) return {};
 
-    QPair<QImage, QImage> adjusted = applyStereoWindow(imgL, imgR, windowOffset);
+    QPair<QImage, QImage> adjusted = is360(mode) ? applyStereoWindow360(imgL, imgR, windowOffset)
+                                                 : applyStereoWindow(imgL, imgR, windowOffset);
     QImage combined = combineStereo(adjusted.first, adjusted.second, mode);
     if (combined.isNull()) return {};
 
@@ -332,6 +416,13 @@ QImage StereoProcessor::createPreview(const QImage &imgL,
 
             p.setPen(dividerPen);
             p.drawLine(half, 0, half, pH);
+        } else if (mode == QStringLiteral("vr360_tb")) {
+            // the same line in both eyes, and where they meet
+            int x = int(pW * pos);
+            p.setPen(guidePen);
+            p.drawLine(x, 0, x, pH);
+            p.setPen(dividerPen);
+            p.drawLine(0, pH / 2, pW, pH / 2);
         } else {
             int x = int(pW * pos);
             p.setPen(guidePen);

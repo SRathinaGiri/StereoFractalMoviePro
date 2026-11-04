@@ -18,6 +18,8 @@ set(SOURCES
     src/stereoprocessor.cpp
     src/videoworker.h
     src/videoworker.cpp
+    src/spherical.h
+    src/spherical.cpp
 )
 
 add_executable(StereoMoviePro WIN32
@@ -38,6 +40,8 @@ add_executable(TestStereo
     src/stereoprocessor.cpp
     src/videoworker.h
     src/videoworker.cpp
+    src/spherical.h
+    src/spherical.cpp
 )
 
 target_link_libraries(TestStereo PRIVATE
