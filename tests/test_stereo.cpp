@@ -239,13 +239,18 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
             QByteArray d = f.readAll();
-            if (!d.contains("st3d") || !d.contains("sv3d") || !d.contains("equi")) {
+            if (!d.contains("st3d") || !d.contains("sv3d") || !d.contains("equi") ||
+                d.count(QByteArray::fromHex("ffcc8263f8554a938814587a02521fdd")) != 1 ||
+                !d.contains("<GSpherical:ProjectionType>equirectangular</GSpherical:ProjectionType>")) {
                 std::cerr << "FAIL: no spherical metadata in " << o.toStdString() << std::endl;
                 return 1;
             }
             // done again: replaced, not added
-            QByteArray again = Spherical::inject(d, Spherical::Stereo::TopBottom);
-            if (again.size() != d.size() || again.count("sv3d") != 1) {
+            QByteArray again;
+            const Spherical::Stereo same = o.contains("_TB") ? Spherical::Stereo::TopBottom : Spherical::Stereo::Mono;
+            again = Spherical::inject(d, same);
+            if (again.size() != d.size() || again.count("sv3d") != 1 ||
+                again.count(QByteArray::fromHex("ffcc8263f8554a938814587a02521fdd")) != 1) {
                 std::cerr << "FAIL: injecting twice changed the size" << std::endl;
                 return 1;
             }
@@ -263,7 +268,7 @@ int main(int argc, char *argv[]) {
             }
             std::cout << "PASS: ffprobe reads 360 equirectangular, top and bottom." << std::endl;
         }
-        std::cout << "PASS: 360 VR stereo and mono MP4s carry the Spherical Video V2 metadata." << std::endl;
+        std::cout << "PASS: 360 VR stereo and mono MP4s carry the Spherical Video V1 and V2 metadata." << std::endl;
         QDir(vrDir).removeRecursively();
     }
 

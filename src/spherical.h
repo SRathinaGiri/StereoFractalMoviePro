@@ -10,7 +10,10 @@
 // the Spherical Video V2 boxes (Google's specification, read by YouTube,
 // Meta Quest's players, VLC and others) inside the video track's sample
 // entry: 'st3d' (the stereo layout) and 'sv3d' (with an equirectangular
-// 'proj'). FFmpeg does not write them, so they are added after encoding.
+// 'proj'), and the older Spherical Video V1 XML in a 'uuid' box in the
+// video track (what Google's Spatial Media Metadata Injector writes, so
+// what Facebook's 360 detection has been made to work with). FFmpeg
+// writes neither, so they are added after encoding.
 namespace Spherical {
 
 enum class Stereo { Mono = 0, TopBottom = 1, LeftRight = 2 };

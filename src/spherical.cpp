@@ -83,6 +83,31 @@ QByteArray sphericalBoxes(Stereo stereo) {
     return st3d + makeBox("sv3d", svhd + proj);
 }
 
+// The uuid of the Spherical Video V1 metadata box.
+const QByteArray &v1Uuid() {
+    static const QByteArray u = QByteArray::fromHex("ffcc8263f8554a938814587a02521fdd");
+    return u;
+}
+
+// The Spherical Video V1 box (Google's spherical video RFC: XML in a uuid
+// box in the video track), what Google's Spatial Media Metadata Injector
+// writes (players such as Facebook's may only look for this one).
+QByteArray sphericalV1Box(Stereo stereo) {
+    QByteArray mode;
+    if (stereo == Stereo::TopBottom) mode = "<GSpherical:StereoMode>top-bottom</GSpherical:StereoMode>";
+    if (stereo == Stereo::LeftRight) mode = "<GSpherical:StereoMode>left-right</GSpherical:StereoMode>";
+    QByteArray xml =
+        "<?xml version=\"1.0\"?><rdf:SphericalVideo\n"
+        "xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n"
+        "xmlns:GSpherical=\"http://ns.google.com/videos/1.0/spherical/\">"
+        "<GSpherical:Spherical>true</GSpherical:Spherical>"
+        "<GSpherical:Stitched>true</GSpherical:Stitched>"
+        "<GSpherical:StitchingSoftware>Spherical Metadata Tool</GSpherical:StitchingSoftware>"
+        "<GSpherical:ProjectionType>equirectangular</GSpherical:ProjectionType>" +
+        mode + "</rdf:SphericalVideo>";
+    return makeBox("uuid", v1Uuid() + xml);
+}
+
 bool isVideoEntry(const QByteArray &t) {
     static const char *const kinds[] = {"avc1", "avc3", "hvc1", "hev1", "mp4v", "vp09", "av01"};
     for (const char *k : kinds) {
@@ -104,7 +129,25 @@ bool rewrite(const QByteArray &b, qsizetype from, qsizetype to, Stereo stereo, q
     for (const Box &bx : list) {
         const qsizetype body = bx.start + bx.header;
         const QByteArray &t = bx.type;
-        if (t == "moov" || t == "trak" || t == "mdia" || t == "minf" || t == "stbl") {
+        if (t == "trak") {
+            // a video track also gets the V1 box (an old one dropped)
+            const int before = found;
+            QByteArray inner;
+            if (!rewrite(b, body, bx.end, stereo, delta, found, inner, error)) return false;
+            if (found > before) {
+                QList<Box> kids;
+                if (!boxes(inner, 0, inner.size(), kids, error)) return false;
+                QByteArray t2;
+                for (const Box &k : kids) {
+                    const bool v1 = k.type == "uuid" && inner.mid(k.start + k.header, 16) == v1Uuid();
+                    if (!v1) t2.append(inner.mid(k.start, k.end - k.start));
+                }
+                t2.append(sphericalV1Box(stereo));
+                out.append(makeBox("trak", t2));
+            } else {
+                out.append(makeBox("trak", inner));
+            }
+        } else if (t == "moov" || t == "mdia" || t == "minf" || t == "stbl") {
             QByteArray inner;
             if (!rewrite(b, body, bx.end, stereo, delta, found, inner, error)) return false;
             out.append(makeBox(t.constData(), inner));
