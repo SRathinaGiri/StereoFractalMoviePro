@@ -2,7 +2,7 @@
 ; Generates a modern, standalone Windows installer
 
 #define MyAppName "Stereo Fractal Movie Pro"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "S. Rathinagiri"
 #define MyAppURL "https://github.com/SRathinaGiri/StereoFractalMoviePro"
 #define MyAppExeName "StereoMoviePro.exe"
@@ -20,7 +20,7 @@ DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 LicenseFile=..\LICENSE
 OutputDir=..\release_assets
-OutputBaseFilename=StereoFractalMoviePro-Setup-v1.0.0
+OutputBaseFilename=StereoFractalMoviePro-Setup-v{#MyAppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

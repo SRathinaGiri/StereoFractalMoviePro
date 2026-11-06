@@ -64,9 +64,9 @@ Grab the latest pre-compiled binaries from the [**Releases Page**](https://githu
 
 | Asset | Description |
 | :--- | :--- |
-| **`StereoFractalMoviePro-Setup-v1.0.0.exe`** | Standard Windows installer with desktop and start menu shortcuts |
-| **`StereoFractalMoviePro-Portable-v1.0.0.zip`** | Portable standalone application folder (run without installation) |
-| **`StereoFractalMoviePro-Source-v1.0.0.zip`** | Complete C++ source code archive |
+| **`StereoFractalMoviePro-Setup-v1.1.0.exe`** | Standard Windows installer with desktop and start menu shortcuts |
+| **`StereoFractalMoviePro-Portable-v1.1.0.zip`** | Portable standalone application folder (run without installation) |
+| **`StereoFractalMoviePro-Source-v1.1.0.zip`** | Complete C++ source code archive |
 
 ---
 
