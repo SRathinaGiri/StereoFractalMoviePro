@@ -1,6 +1,8 @@
 #include "videoworker.h"
 #include "spherical.h"
 #include <QProcess>
+#include <QRegularExpression>
+#include <new>
 #include <QFileInfo>
 #include <QDir>
 #include <QStandardPaths>
@@ -10,11 +12,37 @@
 VideoWorker::VideoWorker(const RenderOptions &options, QObject *parent)
     : QObject(parent), m_options(options) {}
 
+// FFmpeg's error lines: its last few hundred characters are encoder
+// statistics, which hid the actual cause
+QString VideoWorker::ffmpegErrors(const QByteArray &stderrBytes) {
+    const QStringList lines = QString::fromUtf8(stderrBytes).split(QRegularExpression(QStringLiteral("[\r\n]+")), Qt::SkipEmptyParts);
+    QStringList errors;
+    for (const QString &line : lines) {
+        if (line.contains(QStringLiteral("rror")) || line.contains(QStringLiteral("Cannot")) ||
+            line.contains(QStringLiteral("Invalid")) || line.contains(QStringLiteral("failed"))) {
+            errors << line.trimmed();
+        }
+    }
+    if (errors.isEmpty()) return QString::fromUtf8(stderrBytes).right(400);
+    return errors.mid(std::max<qsizetype>(0, errors.size() - 8)).join(QLatin1Char('\n'));
+}
+
+void VideoWorker::process() {
+    // an allocation that fails (a frame is ~100 MB at 5760x5760) throws;
+    // uncaught in this thread it would close the app without a word
+    try {
+        render();
+    } catch (const std::bad_alloc &) {
+        emit finished(false, QStringLiteral("Not enough memory to make the video. Close other programs "
+                                            "(browsers, databases, virtual machines) and try again."));
+    }
+}
+
 void VideoWorker::cancel() {
     m_cancelled.store(true);
 }
 
-void VideoWorker::process() {
+void VideoWorker::render() {
     if (m_options.framePairs.isEmpty()) {
         emit finished(false, QStringLiteral("No frames available for processing."));
         return;
@@ -119,6 +147,15 @@ void VideoWorker::process() {
                  << QStringLiteral("-pix_fmt") << QStringLiteral("yuv420p");
         }
 
+        // x264's own threads and look-ahead hold dozens of frames: at
+        // 5760x5760 that is ~15 GB (measured), more than a PC often has
+        // spare, and FFmpeg then ends the video early. 6 threads and a
+        // 10-frame look-ahead: ~5 GB, same speed, same file size.
+        if (static_cast<qint64>(outW) * outH > 3840LL * 2160) {
+            args << QStringLiteral("-threads") << QStringLiteral("6")
+                 << QStringLiteral("-x264-params") << QStringLiteral("rc-lookahead=10");
+        }
+
         if (mode == QStringLiteral("parallel") || mode == QStringLiteral("cross")) {
             args << QStringLiteral("-metadata:s:v:0") << QStringLiteral("stereo_mode=left_right");
         }
@@ -142,6 +179,16 @@ void VideoWorker::process() {
                 ffmpeg.waitForFinished(2000);
                 QFile::remove(outputPath);
                 emit finished(false, QStringLiteral("Processing cancelled by user."));
+                return;
+            }
+
+            // FFmpeg can end before the last frame (out of memory, disk
+            // full): stop and say why, rather than feed a closed pipe
+            if (ffmpeg.state() != QProcess::Running) {
+                emit finished(false, QStringLiteral("FFmpeg stopped after %1 of %2 frames of %3, so the video is incomplete.\n"
+                                                    "If it says it could not allocate memory: close other programs and try again.\n\n%4")
+                                         .arg(frameIdx).arg(totalFrames).arg(mode)
+                                         .arg(ffmpegErrors(ffmpeg.readAllStandardError())));
                 return;
             }
 
@@ -228,8 +275,7 @@ void VideoWorker::process() {
         }
 
         if (ffmpeg.exitStatus() != QProcess::NormalExit || ffmpeg.exitCode() != 0) {
-            QString err = QString::fromUtf8(ffmpeg.readAllStandardError());
-            emit finished(false, QStringLiteral("FFmpeg failed with exit code %1:\n%2").arg(ffmpeg.exitCode()).arg(err.right(400)));
+            emit finished(false, QStringLiteral("FFmpeg failed with exit code %1:\n%2").arg(ffmpeg.exitCode()).arg(ffmpegErrors(ffmpeg.readAllStandardError())));
             return;
         }
 

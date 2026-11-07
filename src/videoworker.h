@@ -39,6 +39,9 @@ signals:
     void finished(bool success, const QString &message);
 
 private:
+    void render();
+    static QString ffmpegErrors(const QByteArray &stderrBytes);
+
     RenderOptions m_options;
     std::atomic<bool> m_cancelled{false};
 };
