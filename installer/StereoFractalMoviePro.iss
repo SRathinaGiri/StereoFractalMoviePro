@@ -2,7 +2,7 @@
 ; Generates a modern, standalone Windows installer
 
 #define MyAppName "Stereo Fractal Movie Pro"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.1"
 #define MyAppPublisher "S. Rathinagiri"
 #define MyAppURL "https://github.com/SRathinaGiri/StereoFractalMoviePro"
 #define MyAppExeName "StereoMoviePro.exe"

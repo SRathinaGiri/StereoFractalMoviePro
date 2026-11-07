@@ -1,27 +1,17 @@
-## Stereo Fractal Movie Pro v1.1.0 — 360° VR
+## Stereo Fractal Movie Pro v1.1.1 — large VR videos fixed
 
-Adds **360° VR video output**, so the app now covers flat stereo, anaglyph and VR headsets in one tool.
+A bug-fix release for **large 360° VR videos** (e.g. 5760×2880 per eye → a 5760×5760 top-bottom MP4).
 
-### 🆕 New output modes
-- **360° VR Stereo (Top-Bottom)**: for Meta Quest, YouTube VR and other headset players. Takes 2:1 equirectangular panorama frames (e.g. Mandelbulb3D's spherical panorama camera in stereo) with the left eye on top and the right eye below. Output: `vr360_final_360_TB.mp4`.
-- **360° VR Mono**: the left-eye panorama alone, for Facebook 360, YouTube 360 on phones and other mono 360 players. Output: `vr360_mono_final_360.mp4`.
+### 🐞 Fixed
+- **The app closed part-way through a 5760×5760 video** (for example after 13 seconds), leaving a short MP4. At that size FFmpeg's H.264 encoder used about 15 GB of memory with its default settings; when the PC had less to spare, FFmpeg ended the video early and the app then closed without a message.
+- For frames larger than 4K the encoder now runs with 6 threads and a 10-frame look-ahead: **about 5 GB instead of 15 GB**, at the same speed and the same file size (measured on a 501-frame 5760×5760 video).
 
-### 🧭 360° metadata
-- **Spherical Video V2** (`sv3d` equirectangular + `st3d` top-bottom) written into the MP4.
-- **Spherical Video V1** (XMP `uuid` box) written as well, for older players and uploaders.
-- File names carry the `_360` / `_TB` suffixes for players that go by the name.
+### 💬 Clearer errors
+- If FFmpeg stops before the last frame, the app now stops and says after which frame and why, instead of carrying on.
+- If memory runs out, the app shows "Not enough memory… close other programs" instead of closing.
+- Error messages show FFmpeg's actual error lines rather than the end of its encoder statistics.
 
-### 🎯 360-aware processing
-- **Stereo window** wraps the left eye around the sphere by the offset rather than cropping, so the seam behind the viewer stays intact.
-- **3D text** sits in front of the viewer, above and below the horizon, rather than at the poles.
-- **Audio** works as in the other modes (AAC, 3-second fade-out), as normal stereo sound (not head-tracked spatial audio).
-- Tip: render panoramas at **4096×2048 per eye or larger** for a sharp image in a headset.
-
-### 🔧 Other
-- Automated Windows build and test workflow (GitHub Actions, Qt 6.8 MinGW); release packages are now built by CI.
-- New unit tests for the spherical metadata and 360° frame processing.
-
-All four v1.0.0 modes (Parallel, Cross-Eye, Color Anaglyph, Grayscale Anaglyph) are unchanged.
+Everything else is as in v1.1.0 (360° VR stereo and mono, Parallel, Cross-Eye, Color and Grayscale Anaglyph).
 
 ---
 
@@ -29,11 +19,11 @@ All four v1.0.0 modes (Parallel, Cross-Eye, Color Anaglyph, Grayscale Anaglyph) 
 
 | Download | File | Description |
 | :--- | :--- | :--- |
-| **Installer** | `StereoFractalMoviePro-Setup-v1.1.0.exe` | Windows installer with desktop & start menu shortcuts + uninstaller |
-| **Portable** | `StereoFractalMoviePro-Portable-v1.1.0.zip` | Extract and run `StereoMoviePro.exe`, no installation needed |
-| **Source Code** | `StereoFractalMoviePro-Source-v1.1.0.zip` | C++ / Qt source archive |
+| **Installer** | `StereoFractalMoviePro-Setup-v1.1.1.exe` | Windows installer with desktop & start menu shortcuts + uninstaller |
+| **Portable** | `StereoFractalMoviePro-Portable-v1.1.1.zip` | Extract and run `StereoMoviePro.exe`, no installation needed |
+| **Source Code** | `StereoFractalMoviePro-Source-v1.1.1.zip` | C++ / Qt source archive |
 
-FFmpeg must be on your PATH (as in v1.0.0).
+FFmpeg must be on your PATH (as in earlier versions).
 
 ---
 *Built with Qt 6.8.3 MinGW 64-bit and CMake on GitHub Actions.*
